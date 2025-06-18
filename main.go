@@ -21,22 +21,21 @@ func main() {
 }
 
 func run() {
-	fmt.Printf("Running %v \n", os.Args[2:])
+	fmt.Printf("Running %v with PID %d\n", os.Args[2:], os.Getpid())
 
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:   syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
-		Unshareflags: syscall.CLONE_NEWNS,
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
 	}
 
 	must(cmd.Run())
 }
 
 func child() {
-	fmt.Printf("Running %v \n", os.Args[2:])
+	fmt.Printf("Running %v with PID %d\n", os.Args[2:], os.Getpid())
 
 	cg()
 
@@ -56,13 +55,10 @@ func child() {
 }
 
 func cg() {
-	cgroups := "/sys/fs/cgroup/"
-	pids := filepath.Join(cgroups, "pids")
-	os.Mkdir(filepath.Join(pids, "pedro-leal"), 0755)
-	must(os.WriteFile(filepath.Join(pids, "pedro-leal/pids.max"), []byte("20"), 0700))
-	// Removes the new cgroup in place after the container exits
-	must(os.WriteFile(filepath.Join(pids, "pedro-leal/notify_on_release"), []byte("1"), 0700))
-	must(os.WriteFile(filepath.Join(pids, "pedro-leal/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700))
+	cgroupPath := "/sys/fs/cgroup/pedro-leal"
+	must(os.MkdirAll(cgroupPath, 0755))
+	must(os.WriteFile(filepath.Join(cgroupPath, "pids.max"), []byte("20"), 0700))
+	must(os.WriteFile(filepath.Join(cgroupPath, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700))
 }
 
 func must(err error) {
