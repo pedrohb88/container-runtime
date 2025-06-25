@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strconv"
 	"syscall"
 )
 
@@ -27,8 +25,16 @@ func run() {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS,
+		Credential: &syscall.Credential{Uid: 0, Gid: 0},
+		UidMappings: []syscall.SysProcIDMap{
+			{ContainerID: 0, HostID: os.Getuid(), Size: 1},
+		},
+		GidMappings: []syscall.SysProcIDMap{
+			{ContainerID: 0, HostID: os.Getgid(), Size: 1},
+		},
 	}
 
 	must(cmd.Run())
@@ -36,8 +42,6 @@ func run() {
 
 func child() {
 	fmt.Printf("Running %v with PID %d\n", os.Args[2:], os.Getpid())
-
-	cg()
 
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
@@ -47,18 +51,12 @@ func child() {
 	must(syscall.Sethostname([]byte("container")))
 	must(syscall.Chroot("/home/pedro-leal/ubuntufs"))
 	must(os.Chdir("/"))
+
 	must(syscall.Mount("proc", "proc", "proc", 0, ""))
 
 	must(cmd.Run())
 
 	must(syscall.Unmount("proc", 0))
-}
-
-func cg() {
-	cgroupPath := "/sys/fs/cgroup/pedro-leal"
-	must(os.MkdirAll(cgroupPath, 0755))
-	must(os.WriteFile(filepath.Join(cgroupPath, "pids.max"), []byte("20"), 0700))
-	must(os.WriteFile(filepath.Join(cgroupPath, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700))
 }
 
 func must(err error) {
